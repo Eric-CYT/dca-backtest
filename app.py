@@ -73,7 +73,8 @@ st.markdown(
 )
 
 # 每組計畫的固定配色（顏色標籤 + 圖表線色一致）
-PALETTE = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2"]
+PALETTE = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2",
+           "#db2777", "#65a30d", "#ca8a04", "#4f46e5"]
 
 
 # =============================================================================
@@ -137,7 +138,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("② 計畫（可多組對比）")
-    n_plans = st.number_input("計畫數量", min_value=1, max_value=6, value=2, step=1)
+    n_plans = st.number_input("計畫數量", min_value=1, max_value=10, value=2, step=1)
 
     plans = []
     for i in range(int(n_plans)):
