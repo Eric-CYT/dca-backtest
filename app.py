@@ -124,6 +124,17 @@ with st.sidebar:
     currency = st.text_input("計價符號（顯示用）", value="$",
                              help="僅為顯示；混用不同市場時金額幣別以各標的為準。")
 
+    # 排序設定：預設依「總報酬率」由高到低，讓表現最好的計畫排最前面。
+    sort_metric = st.selectbox(
+        "績效排序依據",
+        options=[("總報酬率", "total_return"),
+                 ("年化報酬(IRR)", "annualized_return"),
+                 ("期末市值", "final_value")],
+        format_func=lambda x: x[0],
+    )[1]
+    sort_desc = st.radio("排序方向", options=["高 → 低", "低 → 高"],
+                         horizontal=True) == "高 → 低"
+
     st.divider()
     st.subheader("② 計畫（可多組對比）")
     n_plans = st.number_input("計畫數量", min_value=1, max_value=6, value=2, step=1)
@@ -185,6 +196,16 @@ for plan in plans:
 if not results:
     st.warning("沒有任何計畫成功，請檢查代碼或參數。")
     st.stop()
+
+# ---- 依所選指標排序（NaN 一律沉底，不論升冪或降冪）----
+def _sort_key(item):
+    v = item[1].metrics.get(sort_metric)
+    if v is None or pd.isna(v):
+        # 降冪時給 -inf、升冪時給 +inf，讓無效值永遠落在最後
+        return float("-inf") if sort_desc else float("inf")
+    return v
+
+results.sort(key=_sort_key, reverse=sort_desc)
 
 
 # ------------------------------------------------------------------
