@@ -132,16 +132,16 @@ with st.sidebar:
     for i in range(int(n_plans)):
         color = PALETTE[i % len(PALETTE)]
         st.markdown(chip(f"計畫 {i+1}", color), unsafe_allow_html=True)
-        default_name = f"計畫{i+1}"
         default_ticker = "VOO" if i == 0 else "AAPL"
         default_sched = "5000" if i == 0 else "3000, 5000, 8000"
 
-        name = st.text_input("名稱", value=default_name, key=f"name{i}")
         tk = st.text_input("標的代碼", value=default_ticker, key=f"tk{i}",
                            help="AAPL / VOO / 2330.TW / VWRA.L / 0700.HK …")
         sched = st.text_input("階梯金額（逗號分隔＝逐年）", value=default_sched, key=f"sc{i}",
                               help="例：3000, 5000, 8000 代表第1/2/3年金額；之後沿用最後一格。")
-        plans.append({"name": name, "ticker": tk, "sched": sched, "color": color})
+        # 計畫名稱直接採用輸入的股票代碼；若尚未填代碼則暫用「計畫N」。
+        display_name = tk.strip().upper() or f"計畫{i+1}"
+        plans.append({"name": display_name, "ticker": tk, "sched": sched, "color": color})
         st.markdown("<hr style='margin:6px 0;border:none;border-top:1px dashed #ccc'>",
                     unsafe_allow_html=True)
 
@@ -154,7 +154,13 @@ with st.sidebar:
 st.title("📈 全球定期定額 (DCA) 回測工具")
 st.caption("支援多情境對比與階梯式動態扣款 (Step-up DCA)。手機與電腦皆已響應式優化。")
 
-if not run_btn:
+# 一旦按過「開始回測」，就把狀態記在 session_state。
+# 這樣之後勾選「顯示本金」、切換下拉、改幣別等互動造成的重跑，
+# 都仍會顯示結果，而不會因為按鈕的 True 只存在一瞬間而讓畫面清空。
+if run_btn:
+    st.session_state["has_run"] = True
+
+if not st.session_state.get("has_run"):
     st.info("👈 在左側（手機請點左上角 ▸ 展開側邊欄）設定計畫後，按「開始回測」。")
     st.stop()
 
@@ -269,9 +275,13 @@ st.plotly_chart(fig, use_container_width=True, config={"responsive": True,
 # ------------------------------------------------------------------
 st.subheader("細節下探：本金 vs 市值")
 
-name_to_res = {plan["name"]: (plan, res) for plan, res in results}
-pick = st.selectbox("選擇要下探的計畫", options=list(name_to_res.keys()))
-plan, res = name_to_res[pick]
+# 用索引當選項、代碼當顯示文字，避免兩個計畫同代碼時互相覆蓋
+pick = st.selectbox(
+    "選擇要下探的計畫",
+    options=list(range(len(results))),
+    format_func=lambda i: f"{results[i][0]['name']}（{i+1}）",
+)
+plan, res = results[pick]
 ts = res.timeseries
 
 fig2 = go.Figure()
