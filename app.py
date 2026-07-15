@@ -144,15 +144,45 @@ with st.sidebar:
         color = PALETTE[i % len(PALETTE)]
         st.markdown(chip(f"計畫 {i+1}", color), unsafe_allow_html=True)
         default_ticker = "VOO" if i == 0 else "AAPL"
-        default_sched = "5000" if i == 0 else "3000, 5000, 8000"
 
         tk = st.text_input("標的代碼", value=default_ticker, key=f"tk{i}",
                            help="AAPL / VOO / 2330.TW / VWRA.L / 0700.HK …")
-        sched = st.text_input("階梯金額（逗號分隔＝逐年）", value=default_sched, key=f"sc{i}",
-                              help="例：3000, 5000, 8000 代表第1/2/3年金額；之後沿用最後一格。")
+
+        # ---- 新增式階梯金額：每一年一格，可按鈕增減 ----
+        # 用 session_state 記住「這個計畫有幾年」，才能在重跑後保留使用者加減的結果。
+        ny_key = f"nyears_{i}"
+        if ny_key not in st.session_state:
+            defaults = [5000] if i == 0 else [3000, 5000, 8000]
+            st.session_state[ny_key] = len(defaults)
+            for y, d in enumerate(defaults):       # 預先塞入各年預設值
+                st.session_state[f"amt_{i}_{y}"] = d
+
+        st.caption("階梯金額（逐年）")
+        sched_vals = []
+        for y in range(st.session_state[ny_key]):
+            # 先確保該年欄位有預設值（新加的一年沿用前一年），再建立 widget，避免 value/key 衝突警告
+            if f"amt_{i}_{y}" not in st.session_state:
+                st.session_state[f"amt_{i}_{y}"] = st.session_state.get(f"amt_{i}_{y-1}", 5000)
+            v = st.number_input(f"第 {y+1} 年金額", min_value=0, step=1000,
+                                key=f"amt_{i}_{y}")
+            sched_vals.append(v)
+
+        ca, cb = st.columns(2)
+        if ca.button("＋ 增加一年", key=f"add_{i}", use_container_width=True):
+            y = st.session_state[ny_key]
+            st.session_state[f"amt_{i}_{y}"] = sched_vals[-1] if sched_vals else 5000
+            st.session_state[ny_key] += 1
+            st.rerun()
+        if cb.button("－ 移除一年", key=f"del_{i}", use_container_width=True,
+                     disabled=st.session_state[ny_key] <= 1):
+            st.session_state[ny_key] -= 1
+            st.rerun()
+        st.caption(f"超過 {len(sched_vals)} 年後，將沿用最後一年金額。")
+
         # 計畫名稱直接採用輸入的股票代碼；若尚未填代碼則暫用「計畫N」。
         display_name = tk.strip().upper() or f"計畫{i+1}"
-        plans.append({"name": display_name, "ticker": tk, "sched": sched, "color": color})
+        plans.append({"name": display_name, "ticker": tk,
+                      "sched": sched_vals, "color": color})
         st.markdown("<hr style='margin:6px 0;border:none;border-top:1px dashed #ccc'>",
                     unsafe_allow_html=True)
 
@@ -180,7 +210,9 @@ if not st.session_state.get("has_run"):
 results = []      # (plan_dict, DcaResult)
 for plan in plans:
     try:
-        sched = parse_schedule(plan["sched"])
+        sched = plan["sched"]  # 已是逐年金額陣列（新增式輸入）
+        if not sched or sum(sched) <= 0:
+            raise ValueError("請至少輸入一個大於 0 的年度金額。")
         price = cached_fetch(plan["ticker"].strip(), start_date, end_date)
         res = run_dca(
             price,
